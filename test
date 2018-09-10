@@ -1,0 +1,60 @@
+#!/home/alab/.nix-profile/bin/expect -f
+
+set time [clock seconds]
+set now [clock format $time -format "%D %T"]
+
+set auth_user t1@ngse.dedyn.io
+set auth_pass test4me
+set smtp_host ngse.dedyn.io
+set smtp_from t2@ngse.dedyn.io
+set smtp_rcpt t5@ngse.dedyn.io
+
+spawn openssl s_client -starttls smtp -quiet -connect $smtp_host:25
+
+expect "250 SMTP*"
+send "EHLO localhost\r"
+expect "250 SMTP*"
+send "AUTH LOGIN\r"
+expect "334 VXNlcm5hbWU6"
+send [binary encode base64 $auth_user]
+send "\r"
+expect "334 UGFzc3dvcmQ6"
+send [binary encode base64 $auth_pass]
+send "\r"
+expect {
+  "235 * Authentication successful" {}
+  timeout abort
+}
+send "MAIL FROM: $smtp_from\r"
+expect "250 * Ok"
+send "RCPT TO: $smtp_rcpt\r"
+expect "250 * Ok"
+send "DATA\r"
+expect "354 *"
+send "Subject: Test $now\r.\r";
+expect {
+  "250 2.0.0 Ok: queued as *" {}
+  timeout abort
+}
+send "QUIT\r"
+
+spawn openssl s_client -starttls imap -quiet -connect $smtp_host:143
+
+set auth_user t4@ngse.dedyn.io
+
+expect ". OK *"
+send "1 login $auth_user $auth_pass\r"
+expect {
+  "1 OK Logged in" {}
+  timeout abort
+}
+send "2 SELECT INBOX\r"
+expect "2 OK *"
+send "3 SEARCH SUBJECT \"Test $now\"\r"
+expect {
+  -re ". SEARCH \[0-9\]+" {}
+  timeout abort
+}
+send "4 logout\r"
+
+interact

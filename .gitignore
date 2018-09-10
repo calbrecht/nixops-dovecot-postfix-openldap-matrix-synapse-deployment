@@ -1,0 +1,5 @@
+deployments/*
+!deployments/libvirt.nix
+
+options/*
+!options/ngse.dedyn.io.nix
