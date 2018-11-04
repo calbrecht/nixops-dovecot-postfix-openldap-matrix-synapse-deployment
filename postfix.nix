@@ -48,7 +48,8 @@ in {
       # Valid virtual recipients
       virtual_mailbox_maps = ldap:/etc/postfix_/ldap_virtual_recipients.cf
  
-      # Virtual aliases
+      # Virtual and local aliases
+      alias_maps = ldap:/etc/postfix_/ldap_virtual_aliases.cf
       virtual_alias_maps = ldap:/etc/postfix_/ldap_virtual_aliases.cf
 
       smtpd_sender_login_maps = ldap:/etc/postfix_/ldap_virtual_senders.cf
@@ -91,7 +92,7 @@ in {
       smtpd_client_new_tls_session_rate_limit = 10
  
       # Activate TLS Session Cache
-      smtpd_tls_session_cache_database = btree:/etc/postfix/smtpd_session_cache
+      smtpd_tls_session_cache_database = btree:/var/lib/postfix/data/smtpd_session_cache
  
       # Deny some TLS-Ciphers
       smtpd_tls_exclude_ciphers =
