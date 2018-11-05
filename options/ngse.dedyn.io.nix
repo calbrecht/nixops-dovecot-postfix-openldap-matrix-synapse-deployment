@@ -12,6 +12,9 @@ rec {
   matrix-synapse = {
     serverName = "matrix.${fqdn}";
     registrationSharedSecret = "ojsCMkWjHFEOT65G0TlcNYW6UNtjtv7YfEH4bwrEO9elVZYW7i";
+    registerTestUser = true;
+    testUser = "t4";
+    testPass = "test4me";
   };
   
   openldap = {

@@ -9,17 +9,6 @@ in with lib; {
   ];
 
   nixpkgs.config.packageOverrides = pkgs: with pkgs; rec {
-    matrix-synapse = pkgs.matrix-synapse.overrideDerivation (attrs: rec {
-      name = "matrix-synapse-${version}";
-      version = "0.33.3.1";
-
-      src = fetchFromGitHub {
-        owner = "matrix-org";
-        repo = "synapse";
-        rev = "v${version}";
-        sha256 = "0q7rjh2qwj1ym5alnv9dvgw07bm7kk7igfai9ix72c6n7qb4z4i3";
-      };
-    });
   };
 
   services.nginx.virtualHosts."${opt.matrix-synapse.serverName}" = {
@@ -62,14 +51,15 @@ in with lib; {
     max_upload_size = "10M";
     no_tls = true;
     public_baseurl = "https://${opt.matrix-synapse.serverName}/";
-    registration_shared_secret = "$(opt.matrix-synapse.registrationSharedSecret)";
+    registration_shared_secret = opt.matrix-synapse.registrationSharedSecret;
     server_name = "${fqdn}"; #"${opt.matrix-synapse.serverName}";
     tls_certificate_path = "${config.security.acme.directory}/${fqdn}/fullchain.pem";
     #tls_private_key_path = "${config.security.acme.directory}/${fqdn}/key.pem";
     web_client = true;
   };
 
-  systemd.services.matrix-synapse.postStart = ''
-    #${config.services.matrix-synapse.package}/bin/register_new_matrix_user -u test -p lalala -a -k ${opt.matrix-synapse.registrationSharedSecret} http://localhost:8008
-  '';
+  systemd.services.matrix-synapse.postStart =
+    with opt.matrix-synapse; lib.optionalString registerTestUser ''
+      ${config.services.matrix-synapse.package}/bin/register_new_matrix_user -u ${testUser} -p ${testPass} -k ${registrationSharedSecret} --no-admin https://${fqdn} || true
+    '';
 }

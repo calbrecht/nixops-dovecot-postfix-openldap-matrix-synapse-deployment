@@ -5,11 +5,11 @@ set now [clock format $time -format "%D %T"]
 
 set auth_user t1@ngse.dedyn.io
 set auth_pass test4me
-set smtp_host ngse.dedyn.io
 set smtp_from t2@ngse.dedyn.io
 set smtp_rcpt t5@ngse.dedyn.io
+set test_host ngse.dedyn.io
 
-spawn openssl s_client -starttls smtp -quiet -connect $smtp_host:25
+spawn openssl s_client -starttls smtp -quiet -connect $test_host:25
 
 expect "250 SMTP*"
 send "EHLO localhost\r"
@@ -23,7 +23,7 @@ send [binary encode base64 $auth_pass]
 send "\r"
 expect {
   "235 * Authentication successful" {}
-  timeout abort
+  timeout exit
 }
 send "MAIL FROM: $smtp_from\r"
 expect "250 * Ok"
@@ -34,11 +34,11 @@ expect "354 *"
 send "Subject: Test $now\r.\r";
 expect {
   "250 2.0.0 Ok: queued as *" {}
-  timeout abort
+  timeout exit
 }
 send "QUIT\r"
 
-spawn openssl s_client -starttls imap -quiet -connect $smtp_host:143
+spawn openssl s_client -starttls imap -quiet -connect $test_host:143
 
 set auth_user t4@ngse.dedyn.io
 
@@ -46,15 +46,41 @@ expect ". OK *"
 send "1 login $auth_user $auth_pass\r"
 expect {
   "1 OK Logged in" {}
-  timeout abort
+  timeout exit
 }
 send "2 SELECT INBOX\r"
 expect "2 OK *"
 send "3 SEARCH SUBJECT \"Test $now\"\r"
 expect {
   -re ". SEARCH \[0-9\]+" {}
-  timeout abort
+  timeout exit
 }
 send "4 logout\r"
 
-interact
+spawn openssl s_client -quiet -connect $test_host:443
+
+set auth_user t4
+set flow m.login.password
+
+send "GET /_matrix/client/r0/login HTTP/1.1\r"
+send "Host: $test_host\r\r"
+expect {
+  -re ".*$flow.*" {}
+  timeout exit
+}
+send "\r\r"
+
+set content \{"type":"$flow","user":"$auth_user","password":"$auth_pass"\}
+set length [string bytelength $content]
+
+send "POST /_matrix/client/r0/login HTTP/1.1\r"
+send "Host: $test_host\r"
+send "Content-Length: $length\r"
+send "Content-Type: application/json\r\r"
+send "$content\r\r"
+expect {
+  -re ".*@$auth_user:$test_host" {}
+  timeout exit
+}
+
+close
