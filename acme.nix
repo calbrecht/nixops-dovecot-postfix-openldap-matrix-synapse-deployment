@@ -19,4 +19,6 @@ in {
     production = opt.acme.production;
     certs."${fqdn}".allowKeysForGroup = true;
   };
+
+  systemd.services."acme-${fqdn}".enable = opt.acme.production;
 }
