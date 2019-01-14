@@ -83,4 +83,6 @@ expect {
   timeout exit
 }
 
+puts "\n\nDone, all good."
+
 close
