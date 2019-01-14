@@ -16,7 +16,7 @@ in with lib; {
     useACMEHost = fqdn;
     locations = {
       "/_matrix" = {
-        proxyPass = "http://localhost:8008";
+        proxyPass = "http://127.0.0.1:8008";
         extraConfig = ''
           proxy_set_header X-Forwarded-For $remote_addr;
         '';
