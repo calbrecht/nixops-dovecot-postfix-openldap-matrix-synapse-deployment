@@ -1,5 +1,6 @@
 #!/home/alab/.nix-profile/bin/expect -f
 
+set timeout 30
 set time [clock seconds]
 set now [clock format $time -format "%D %T"]
 
@@ -9,11 +10,11 @@ set smtp_from t2@ngse.dedyn.io
 set smtp_rcpt t5@ngse.dedyn.io
 set test_host ngse.dedyn.io
 
-spawn openssl s_client -starttls smtp -quiet -connect $test_host:25
+set spwan_id [spawn openssl s_client -starttls smtp -quiet -connect $test_host:25]
 
-expect "250 SMTP*"
+expect "250 *"
 send "EHLO localhost\r"
-expect "250 SMTP*"
+expect "250 *"
 send "AUTH LOGIN\r"
 expect "334 VXNlcm5hbWU6"
 send [binary encode base64 $auth_user]
@@ -38,7 +39,9 @@ expect {
 }
 send "QUIT\r"
 
-spawn openssl s_client -starttls imap -quiet -connect $test_host:143
+close $spawn_id
+
+set spwan_id [spawn openssl s_client -starttls imap -quiet -connect $test_host:143]
 
 set auth_user t4@ngse.dedyn.io
 
@@ -56,6 +59,8 @@ expect {
   timeout exit
 }
 send "4 logout\r"
+
+close $spawn_id
 
 spawn openssl s_client -quiet -connect $test_host:443
 
