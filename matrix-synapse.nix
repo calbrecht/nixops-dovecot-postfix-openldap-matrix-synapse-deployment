@@ -11,6 +11,14 @@ in with lib; {
   nixpkgs.config.packageOverrides = pkgs: with pkgs; rec {
   };
 
+  services.postgresql = {
+    enable = true;
+    package = pkgs.postgresql_11;
+    extraConfig = ''
+      synchronous_commit = off
+    '';
+  };
+
   services.nginx.virtualHosts."${opt.matrix-synapse.serverName}" = {
     forceSSL = true;
     useACMEHost = fqdn;
@@ -29,7 +37,7 @@ in with lib; {
   services.matrix-synapse = {
     enable = true;
     enable_registration = false;
-    database_type = "sqlite3";
+    database_type = "psycopg2";
     listeners =  [
       {
         bind_address = "localhost";
