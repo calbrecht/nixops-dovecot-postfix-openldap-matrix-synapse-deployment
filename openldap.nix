@@ -25,7 +25,12 @@ in with lib; {
     });
   };
 
-  services.openldap.enable = true;
+  services.openldap = {
+    enable = true;
+    rootdn = "cn=fake,cn=${opt.openldap.rootCN},${dc}";
+    rootpw = "fake";
+    suffix = dc;
+  };
 
   systemd.services = {
     slapadd = {
