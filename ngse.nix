@@ -9,6 +9,7 @@
       ./openldap.nix
       ./postfix.nix
       ./dovecot.nix
+      ./matterbridge.nix
       ./matrix-synapse.nix
     ];
 
