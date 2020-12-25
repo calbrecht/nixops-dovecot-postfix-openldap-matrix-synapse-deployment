@@ -298,7 +298,8 @@ let
     account="matrix.${fqdn}"
     channel="#nixos:${fqdn}"
   '';
-in {
+in
+{
   services.matterbridge = {
     enable = true;
     configPath = "/etc/nixos/matterbridge.toml";
