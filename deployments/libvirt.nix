@@ -9,6 +9,7 @@
         vcpu = 2;
       };
     };
-    networking.hostName = "ngse.dedyn.io";
+    networking.hostName = "ngse";
+    networking.domain = "dedyn.io";
   };
 }

@@ -1,8 +1,9 @@
-{ pkgs, lib, config, ...}:
+{ pkgs, lib, config, ... }:
 let
-  fqdn = config.networking.hostName;
-  opt = import (./. + "/options/${fqdn}.nix") { fqdn = fqdn; };
-in with lib; {
+  opt = import ./options.nix { inherit config; };
+  fqdn = opt.fqdn;
+in
+with lib; {
 
   environment.systemPackages = with pkgs; [
     #openldap

@@ -1,10 +1,11 @@
 { config, lib, pkgs, ... }:
 let
-  fqdn = config.networking.hostName;
-  opt = import (./. + "/options/${fqdn}.nix") { fqdn = fqdn; };
-in {
+  opt = import ./options.nix { inherit config; };
+  fqdn = opt.fqdn;
+in
+{
   services.nginx.enable = true;
-  
+
   services.nginx.commonHttpConfig = ''
     server_names_hash_bucket_size 64;
   '';

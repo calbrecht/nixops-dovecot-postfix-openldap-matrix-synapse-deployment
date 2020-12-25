@@ -1,12 +1,12 @@
-{ fqdn }:
-
 rec {
+  fqdn = "ngse.dedyn.io";
+
   ip = "192.168.122.9";
 
   acme = {
     preliminarySelfsigned = true;
     production = false;
-    aliases = [ ];
+    aliases = [ "riot.${fqdn}" ];
   };
 
   matrix-synapse = {
@@ -16,7 +16,7 @@ rec {
     testUser = "t4";
     testPass = "test4me";
   };
-  
+
   openldap = {
     ou = {
       services = {
@@ -57,12 +57,13 @@ rec {
     ldap.bind.pw = "e1NTSEF9LzlZM2pTVkdPelhxSm5Jd3RnM0t0UlZ2RnlWazNZVCs=";
     helo.reject = [ ip fqdn ];
     sender = {
-      ns.reject = [];
-      mx.reject = [];
+      ns.reject = [ ];
+      mx.reject = [ ];
     };
-    client.reject = [];
+    client.reject = [ ];
   };
 
   dovecot.dnpass = "e1NTSEF9LzlZM2pTVkdPelhxSm5Jd3RnM0t0UlZ2RnlWazNZVCs=";
 
+  turn.authSecret = "iufds98a7fanfdsaiufa0ds89";
 }

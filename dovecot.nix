@@ -1,10 +1,11 @@
-{ pkgs, lib, config, ...}:
+{ pkgs, lib, config, ... }:
 let
   cfg = config.services.dovecot2;
-  fqdn = config.networking.hostName;
-  opt = import (./. + "/options/${fqdn}.nix") { fqdn = fqdn; };
+  opt = import ./options.nix { inherit config; };
+  fqdn = opt.fqdn;
   dc = "dc=" + lib.concatStringsSep ",dc=" (lib.splitString "." fqdn);
-in {
+in
+{
 
   environment.systemPackages = with pkgs; [
   ];

@@ -1,7 +1,7 @@
-{ pkgs, lib, config, ...}:
+{ pkgs, lib, config, ... }:
 let
-  fqdn = config.networking.hostName;
-  opt = import (./. + "/options/${fqdn}.nix") { fqdn = fqdn; };
+  opt = import ./options.nix { inherit config; };
+  fqdn = opt.fqdn;
   cfg = config.services.openldap // {
     confDir = "/etc/openldap/slapd.d";
     proto = "ldap://127.0.0.1";

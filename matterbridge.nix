@@ -1,7 +1,6 @@
 { config, lib, pkgs, ... }:
 let
-  fqdn = config.networking.hostName;
-  opt = (import (./. + "/options/${fqdn}.nix") { fqdn = fqdn; }) // {
+  opt = (import ./options.nix { inherit config; }) // {
     matterbridge = {
       irc-user = "calbrecht";
       irc-pass = "IRC_PASS_CHANGEME";
@@ -9,6 +8,7 @@ let
       matrix-pass = "MATRIX_PASS_CHANGEME";
     };
   };
+  fqdn = opt.fqdn;
   template = ''
     #This is configuration for matterbridge.
     #WARNING: as this file contains credentials, be sure to set correct file permissions
