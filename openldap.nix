@@ -10,7 +10,8 @@ let
   db-0-init = (builtins.readFile ./etc/ldap/slapcat.0.ldif);
   vmailUser = config.users.users."${config.services.dovecot2.mailUser}";
   vmailGroup = config.users.groups."${config.services.dovecot2.mailGroup}";
-in with lib; {
+in
+with lib; {
 
   environment.systemPackages = with pkgs; [
     openldap
@@ -30,6 +31,7 @@ in with lib; {
     rootdn = "cn=fake,cn=${opt.openldap.rootCN},${dc}";
     rootpw = "fake";
     suffix = dc;
+    database = "hdb";
   };
 
   systemd.services = {
@@ -58,7 +60,7 @@ in with lib; {
       serviceConfig = {
         #ldapsearch -x -W -D uid=dovecot,ou=services,dc=ngse,dc=dedyn,dc=io,dc=de -b ou=people,dc=ngse,dc=dedyn,dc=io,dc=de
         Type = "forking";
-        PIDFile = "/var/run/slapd/slapd.pid";
+        PIDFile = "/run/slapd/slapd.pid";
         ExecStart = pkgs.lib.mkForce "${pkgs.openldap.out}/libexec/slapd -u ${cfg.user} -g ${cfg.group} -F ${cfg.confDir} -h ${cfg.proto}";
       };
     };
@@ -82,7 +84,7 @@ in with lib; {
         olcAccess: {1}to dn.subtree="${dc}"
           by self read
           by dn.base="cn=${opt.openldap.rootCN},${dc}" write
-          by dn.children="ou=services,${dc}" read   
+          by dn.children="ou=services,${dc}" read
           by * none
         olcLastMod: TRUE
         olcRootDN: cn=${opt.openldap.rootCN},${dc}
@@ -100,68 +102,76 @@ in with lib; {
     "openldap/db.1.ldif" = {
       mode = "0600";
       text = ''
-        dn: ${dc}
-        objectClass: top
-        objectClass: dcObject
-        objectClass: organization
-        o: ${head (splitString "." fqdn)}
-        dc: ${head (splitString "." fqdn)}
-        
-        dn: cn=${opt.openldap.rootCN},${dc}
-        objectClass: simpleSecurityObject
-        objectClass: organizationalRole
-        cn: ${opt.openldap.rootCN}
-        description: LDAP administrator
-        userPassword:: ${opt.openldap.rootPW}
-
-        ${concatStringsSep "\n" (mapAttrsToList (ouName: ouValues: ''
-            dn: ou=${ouName},${dc}
-            ou: ${ouName}
-            objectClass: top
-            objectClass: organizationalUnit
-         
-          ''
-          + optionalString (ouName == "services") (concatStringsSep "\n"
-              (mapAttrsToList (serviceName: servicePassword: ''
-                dn: uid=${serviceName},ou=${ouName},${dc}
-                uid: ${serviceName}
+                dn: ${dc}
                 objectClass: top
+                objectClass: dcObject
+                objectClass: organization
+                o: ${head (splitString "." fqdn)}
+                dc: ${head (splitString "." fqdn)}
+
+                dn: cn=${opt.openldap.rootCN},${dc}
                 objectClass: simpleSecurityObject
-                objectClass: account
-                userPassword:: ${servicePassword}
-              '') ouValues)
-          )
-          + optionalString (ouName == "groups") (concatStringsSep "\n"
-              (mapAttrsToList (groupName: groupValues: ''
-                dn: cn=${groupName},ou=${ouName},${dc}
-                cn: ${groupName}
-                objectClass: posixGroup
-                gidNumber: ${toString groupValues.gidNumber}
-                ${concatStringsSep "\n" (map (name: "memberUid: " + name) groupValues.memberUid)}
-              '') ouValues)
-          )
-          + optionalString (ouName == "people") (concatStringsSep "\n"
-              (mapAttrsToList (peopleName: peopleValues: ''
-                dn: uid=${peopleName},ou=${ouName},${dc}
-                uid: ${peopleName}
-                objectClass: PostfixBookMailAccount
-                objectClass: extensibleObject
-                objectClass: person
-                mail: ${peopleName}@${fqdn}
-                sn: ${peopleValues.sn}
-                cn: ${peopleValues.givenName} ${peopleValues.sn}
-                mailUidNumber: ${toString vmailUser.uid}
-                userPassword:: ${peopleValues.userPassword}
-                mailHomeDirectory: ${vmailUser.home}/${peopleName}@${fqdn}
-                mailEnabled: ${if peopleValues.mailEnabled then "TRUE" else "FALSE"}
-                givenName: ${peopleValues.givenName}
-                mailGidNumber: ${toString vmailGroup.gid}
-                mailStorageDirectory: maildir:${vmailUser.home}/${peopleName}@${fqdn}/Maildir
-                mailQuota: ${toString peopleValues.mailQuota}
-                ${concatStringsSep "\n" (map (n: "mailAlias: " + n + "@" + fqdn) peopleValues.mailAlias)}
-              '') ouValues)
-          )
-        ) opt.openldap.ou)}
+                objectClass: organizationalRole
+                cn: ${opt.openldap.rootCN}
+                description: LDAP administrator
+                userPassword:: ${opt.openldap.rootPW}
+
+                ${concatStringsSep "\n" (mapAttrsToList
+        (ouName: ouValues: ''
+                    dn: ou=${ouName},${dc}
+                    ou: ${ouName}
+                    objectClass: top
+                    objectClass: organizationalUnit
+
+                  ''
+                  + optionalString (ouName == "services") (concatStringsSep "\n"
+                      (mapAttrsToList
+        (serviceName: servicePassword: ''
+                        dn: uid=${serviceName},ou=${ouName},${dc}
+                        uid: ${serviceName}
+                        objectClass: top
+                        objectClass: simpleSecurityObject
+                        objectClass: account
+                        userPassword:: ${servicePassword}
+                      '')
+        ouValues)
+                  )
+                  + optionalString (ouName == "groups") (concatStringsSep "\n"
+                      (mapAttrsToList
+        (groupName: groupValues: ''
+                        dn: cn=${groupName},ou=${ouName},${dc}
+                        cn: ${groupName}
+                        objectClass: posixGroup
+                        gidNumber: ${toString groupValues.gidNumber}
+                        ${concatStringsSep "\n" (map (name: "memberUid: " + name) groupValues.memberUid)}
+                      '')
+        ouValues)
+                  )
+                  + optionalString (ouName == "people") (concatStringsSep "\n"
+                      (mapAttrsToList
+        (peopleName: peopleValues: ''
+                        dn: uid=${peopleName},ou=${ouName},${dc}
+                        uid: ${peopleName}
+                        objectClass: PostfixBookMailAccount
+                        objectClass: extensibleObject
+                        objectClass: person
+                        mail: ${peopleName}@${fqdn}
+                        sn: ${peopleValues.sn}
+                        cn: ${peopleValues.givenName} ${peopleValues.sn}
+                        mailUidNumber: ${toString vmailUser.uid}
+                        userPassword:: ${peopleValues.userPassword}
+                        mailHomeDirectory: ${vmailUser.home}/${peopleName}@${fqdn}
+                        mailEnabled: ${if peopleValues.mailEnabled then "TRUE" else "FALSE"}
+                        givenName: ${peopleValues.givenName}
+                        mailGidNumber: ${toString vmailGroup.gid}
+                        mailStorageDirectory: maildir:${vmailUser.home}/${peopleName}@${fqdn}/Maildir
+                        mailQuota: ${toString peopleValues.mailQuota}
+                        ${concatStringsSep "\n" (map (n: "mailAlias: " + n + "@" + fqdn) peopleValues.mailAlias)}
+                      '')
+        ouValues)
+                  )
+                )
+        opt.openldap.ou)}
         
       '';
       uid = config.ids.uids.openldap;
