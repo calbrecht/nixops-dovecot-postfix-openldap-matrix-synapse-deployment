@@ -16,10 +16,13 @@ in
   };
 
   security.acme = {
+    acceptTerms = true;
+    email = "admin@ngse.de";
     preliminarySelfsigned = opt.acme.preliminarySelfsigned;
-    production = opt.acme.production;
-    certs."${fqdn}".allowKeysForGroup = true;
+    #deprecation detected 2020-12-24 certs."${fqdn}".allowKeysForGroup = true;
+  } // lib.optionalAttrs (!opt.acme.production) {
+    server = https://acme-staging-v02.api.letsencrypt.org/directory;
   };
 
-  systemd.services."acme-${fqdn}".enable = opt.acme.production;
+  systemd.services."acme-${fqdn}".enable = true; #opt.acme.production;
 }
