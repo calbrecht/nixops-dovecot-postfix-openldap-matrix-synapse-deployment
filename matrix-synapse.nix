@@ -99,38 +99,6 @@ with lib; {
                   "https://matrix.org" = false;
                 };
               };
-
-              #conf = ''
-              #  {
-              #  "default_hs_url": "https://${fqdn}",
-              #  "default_is_url": "https://${fqdn}",
-              #  "disable_custom_urls" true,
-              #  "disable_guests": true,
-              #  "disable_login_language_selector": false,
-              #  "disable_3pid_login": true,
-              #  "brand": "Riot",
-              #  "integrations_ui_url": "https://scalar.vector.im/",
-              #  "integrations_rest_url": "https://scalar.vector.im/api",
-              #  "integrations_jitsi_widget_url": "https://scalar.vector.im/api/widgets/jitsi.html",
-              #  "features": {
-              #  "feature_groups": "enable",
-              #  "feature_pinning": "enable",
-              #  "feature_reactions": "enable"
-              #  };
-              #  "default_federate": true,
-              #  "default_theme": "dark",
-              #  "roomDirectory": {
-              #  "servers": [
-              #  "${fqdn}", "matrix.mayflower.de", "matrix.org"
-              #  ]
-              #  };
-              #  "welcomeUserId": null,
-              #  "piwik": false,
-              #  "enable_presence_by_hs_url": {
-              #  "https://matrix.org": false
-              #  }
-              #  }
-              #'';
             };
           };
         };
