@@ -30,7 +30,7 @@ in
     members = [ "${cfg.mailUser}" ];
     gid = 5000;
   };
-  
+
   services.dovecot2 = with lib; rec {
     enable = true;
     enablePAM = false;
@@ -39,8 +39,8 @@ in
     mailUser = "vmail";
     mailGroup = "vmail";
     mailLocation = "/var/db/vmail";
-    sslServerCert = "${config.security.acme.directory}/${fqdn}/fullchain.pem";
-    sslServerKey = "${config.security.acme.directory}/${fqdn}/key.pem";
+    sslServerCert = "${config.security.acme.certs."${fqdn}".directory}/fullchain.pem";
+    sslServerKey = "${config.security.acme.certs."${fqdn}".directory}/key.pem";
     modules = [ pkgs.dovecot_pigeonhole ];
     extraConfig = ''
       log_path = syslog
@@ -128,7 +128,7 @@ in
     '';
     sieveScripts."before" = sieveScripts."default";
   };
-  
+
   environment.etc."dovecot/dovecot-ldap.conf.ext" = {
     mode = "0600";
     text = ''
