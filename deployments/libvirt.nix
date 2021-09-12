@@ -1,14 +1,23 @@
+flakes @ { self, nixpkgs, ... }:
+
 {
-  ngse = { config, pkgs, ... }: rec
+  network = {
+    description = "Virtual server";
+    storage.legacy = {};
+  };
+
+  ngse = { config, pkgs, ... }:
   {
     deployment = {
       targetEnv = "libvirtd";
       libvirtd = {
         headless = true;
-        memorySize = 2048;
-        vcpu = 2;
+        memorySize = 4096;
+        vcpu = 4;
+        #networks = [ "ngse-dedyn-io" ];
       };
     };
+
     networking.hostName = "ngse";
     networking.domain = "dedyn.io";
   };

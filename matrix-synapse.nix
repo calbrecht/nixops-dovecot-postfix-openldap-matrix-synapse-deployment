@@ -20,19 +20,56 @@ with lib; {
   services = {
     postgresql = {
       enable = true;
+      # ! good to know ! wiped the existing db
+      initialScript = pkgs.writeText "synapse-init.sql" ''
+        CREATE ROLE "matrix-synapse" WITH LOGIN PASSWORD 'synapse';
+        CREATE DATABASE "matrix-synapse" WITH OWNER "matrix-synapse"
+        TEMPLATE template0
+        LC_COLLATE = "C"
+        LC_CTYPE = "C";
+      '';
       package = pkgs.postgresql_11;
       settings = {
         synchronous_commit = false;
       };
     };
 
-    nginx.virtualHosts = {
-      "${opt.matrix-synapse.serverName}" = {
-        forceSSL = true;
-        useACMEHost = fqdn;
-        locations = {
-          "/".extraConfig = "return 302 https://riot.${fqdn};";
-          "/_matrix" = {
+    nginx = {
+      #https://nixos.org/manual/nixos/stable/index.html#module-services-matrix
+      recommendedTlsSettings = true;
+      recommendedOptimisation = true;
+      recommendedGzipSettings = true;
+      recommendedProxySettings = true;
+
+      logError = "stderr debug";
+
+      virtualHosts = {
+        "${fqdn}" = {
+          addSSL = true;
+          locations."= /.well-known/matrix/server".extraConfig = ''
+            add_header Content-Type application/json;
+            return 200 '${builtins.toJSON {
+              "m.server" = "${opt.matrix.synapse.fqdn}:443";
+            }}';
+          '';
+          locations."= /.well-known/matrix/client".extraConfig = ''
+            add_header Content-Type application/json;
+            add_header Access-Control-Allow-Origin *;
+            return 200 '${builtins.toJSON {
+              "m.homeserver" = {
+                "base_url" = "https://${opt.matrix.synapse.fqdn}";
+              };
+              "m.identity_server" = {
+                #"base_url" = "https://vector.im";
+                "base_url" = "https://${opt.matrix.synapse.fqdn}";
+              };
+            }}';
+          '';
+        };
+        "${opt.matrix.synapse.fqdn}" = {
+          forceSSL = true;
+          locations."/".extraConfig = "return 302 https://${opt.matrix.element.fqdn};";
+          locations."/_matrix" = {
             proxyPass = "http://127.0.0.1:8008";
             extraConfig = ''
               proxy_set_header Host $host;
@@ -40,18 +77,18 @@ with lib; {
             '';
             priority = 30;
           };
-          "/_matrix/identity" = {
-            proxyPass = "http://127.0.0.1:8090/_matrix/identity";
+          locations."/_matrix/identity" = {
+            proxyPass = "http://127.0.0.1:8090";
             extraConfig = ''
-              add_header Access-Control-Allow-Origin *;
-              add_header Access-Control-Allow-Method 'GET, POST, PUT, DELETE, OPTIONS';
-              proxy_set_header Host $host;
-              proxy_set_header X-Forwarded-For $remote_addr;
+              #add_header Access-Control-Allow-Origin *;
+              #add_header Access-Control-Allow-Method 'GET, POST, PUT, DELETE, OPTIONS';
+              #proxy_set_header Host $host;
+              #proxy_set_header X-Forwarded-For $remote_addr;
             '';
             priority = 20;
           };
-          "/_matrix/client/r0/user_directory" = {
-            proxyPass = "http://127.0.0.1:8090/_matrix/client/r0/user_directory";
+          locations."/_matrix/client/r0/user_directory" = {
+            proxyPass = "http://127.0.0.1:8090";
             extraConfig = ''
               proxy_set_header Host $host;
               proxy_set_header X-Forwarded-For $remote_addr;
@@ -59,48 +96,38 @@ with lib; {
             priority = 10;
           };
         };
-      };
-      "riot.${fqdn}" = {
-        forceSSL = true;
-        useACMEHost = fqdn;
-
-        locations = {
-          "/" = {
-            root = pkgs.element-web.override {
-              #welcomePageUrl = "home.html";
-              conf = {
-                "default_hs_url" = "https://${fqdn}";
-                "default_is_url" = "https://${fqdn}";
-                "disable_custom_urls" = true;
-                "disable_guests" = true;
-                "disable_login_language_selector" = false;
-                "disable_3pid_login" = true;
-                "brand" = "Riot";
-                "integrations_ui_url" = "https://scalar.vector.im/";
-                "integrations_rest_url" = "https://scalar.vector.im/api";
-                "integrations_jitsi_widget_url" = "https://scalar.vector.im/api/widgets/jitsi.html";
-                "features" = {
-                  "feature_groups" = "enable";
-                  "feature_pinning" = "enable";
-                  "feature_reactions" = "enable";
-                };
-                "default_federate" = true;
-                "default_theme" = "dark";
-                "roomDirectory" = {
-                  "servers" = [
-                    fqdn
-                    "matrix.mayflower.de"
-                    "matrix.org"
-                  ];
-                };
-                "welcomeUserId" = null;
-                "piwik" = false;
-                "enable_presence_by_hs_url" = {
-                  "https://matrix.org" = false;
-                };
+        "${opt.matrix.element.fqdn}" = {
+          forceSSL = true;
+          root = pkgs.element-web.override {
+            # https://github.com/vector-im/element-web/blob/develop/docs/config.md
+            conf = {
+              default_server_config."m.homeserver" = {
+                "base_url" = "https://${opt.matrix.synapse.fqdn}";
+                "server_name" = "${fqdn}";
               };
+              default_server_config."m.identity_server" = {
+                "base_url" = "https://${opt.matrix.synapse.fqdn}";
+              };
+              default_theme = "dark";
+              features = {
+                feature_new_spinner = true;
+                feature_pinning = true;
+                feature_many_integration_managers = true;
+                feature_presence_in_room_list = true;
+                feature_latex_maths = true;
+              };
+              roomDirectory.servers = [
+                opt.matrix.synapse.fqdn
+                "matrix.mayflower.de"
+                "matrix.org"
+              ];
+              defaultCountryCode = "DE";
+              showLabsSettings = true;
+              disable_custom_urls = true;
+              permalinkPrefix = "https://${opt.matrix.element.fqdn}";
             };
           };
+          locations."/".index = "index.html";
         };
       };
     };
@@ -114,16 +141,10 @@ with lib; {
         {
           bind_address = "localhost";
           port = 8008;
-          resources = [
-            {
-              compress = true;
-              names = [ "client" "webclient" ];
-            }
-            {
-              compress = false;
-              names = [ "federation" ];
-            }
-          ];
+          resources = [{
+            compress = false;
+            names = [ "client" "federation" ];
+          }];
           tls = false;
           type = "http";
           x_forwarded = true;
@@ -131,9 +152,9 @@ with lib; {
       ];
       max_upload_size = "10M";
       no_tls = true;
-      public_baseurl = "https://${opt.matrix-synapse.serverName}/";
-      registration_shared_secret = opt.matrix-synapse.registrationSharedSecret;
-      server_name = "${fqdn}"; #"${opt.matrix-synapse.serverName}";
+      public_baseurl = "https://${opt.matrix.synapse.fqdn}/";
+      registration_shared_secret = opt.matrix.synapse.registrationSharedSecret;
+      server_name = "${fqdn}"; #"${opt.matrix.synapse.fqdn}";
       tls_certificate_path = "${config.security.acme.certs."${fqdn}".directory}/fullchain.pem";
       #tls_private_key_path = "${config.security.acme.certs."${fqdn}".directory}/key.pem";
       turn_uris = [
@@ -144,14 +165,18 @@ with lib; {
       turn_user_lifetime = "86400000";
       #deprecation detected 2020-12-24 web_client = true;
       #deprecated 2019-10-14 trusted_third_party_id_servers = [ fqdn ];
+      verbose = "0";
     };
 
     mxisd = {
       enable = true;
+      package = pkgs.ma1sd;
       matrix.domain = fqdn;
+      server.name = opt.matrix.synapse.fqdn;
+      server.port = 8090;
       extraConfig = {
         dns.overwrite.homeserver.client = [
-          { name = opt.matrix-synapse.serverName; value = "http://127.0.0.1:8008"; }
+          { name = opt.matrix.synapse.fqdn; value = "http://127.0.0.1:8008"; }
         ];
         session.policy.validation = {
           enabled = true;
@@ -189,8 +214,8 @@ with lib; {
   };
 
   systemd.services.matrix-synapse.postStart =
-    with opt.matrix-synapse; lib.optionalString registerTestUser ''
-      ${config.services.matrix-synapse.package}/bin/register_new_matrix_user -u ${testUser} -p ${testPass} -k ${registrationSharedSecret} --no-admin https://${fqdn} || true
+    with opt.matrix.synapse; lib.optionalString registerTestUser ''
+      ${config.services.matrix-synapse.package}/bin/register_new_matrix_user -u ${testUser} -p ${testPass} -k ${registrationSharedSecret} --no-admin http://localhost:8008 || true
     '';
 
   users.extraGroups.nginx.members = [

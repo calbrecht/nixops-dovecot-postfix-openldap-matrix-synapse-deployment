@@ -6,15 +6,18 @@ rec {
   acme = {
     preliminarySelfsigned = true;
     production = false;
-    aliases = [ "riot.${fqdn}" ];
+    aliases = [ matrix.element.fqdn matrix.synapse.fqdn ];
   };
 
-  matrix-synapse = {
-    serverName = "matrix.${fqdn}";
-    registrationSharedSecret = "ojsCMkWjHFEOT65G0TlcNYW6UNtjtv7YfEH4bwrEO9elVZYW7i";
-    registerTestUser = true;
-    testUser = "t4";
-    testPass = "test4me";
+  matrix = {
+    synapse = {
+      fqdn = "matrix.${fqdn}";
+      registrationSharedSecret = "ojsCMkWjHFEOT65G0TlcNYW6UNtjtv7YfEH4bwrEO9elVZYW7i";
+      registerTestUser = true;
+      testUser = "t4";
+      testPass = "test4me";
+    };
+    element.fqdn = "riot.${fqdn}";
   };
 
   openldap = {

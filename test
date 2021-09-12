@@ -62,13 +62,15 @@ send "4 logout\r"
 
 close $spawn_id
 
-spawn openssl s_client -quiet -connect $test_host:443
+set matrix_host matrix.$test_host
+
+spawn openssl s_client -quiet -connect $matrix_host:443
 
 set auth_user t4
 set flow m.login.password
 
 send "GET /_matrix/client/r0/login HTTP/1.1\r"
-send "Host: $test_host\r\r"
+send "Host: $matrix_host\r\r"
 expect {
   -re ".*$flow.*" {}
   timeout exit
@@ -79,7 +81,7 @@ set content \{"type":"$flow","user":"$auth_user","password":"$auth_pass"\}
 set length [string bytelength $content]
 
 send "POST /_matrix/client/r0/login HTTP/1.1\r"
-send "Host: $test_host\r"
+send "Host: $matrix_host\r"
 send "Content-Length: $length\r"
 send "Content-Type: application/json\r\r"
 send "$content\r\r"

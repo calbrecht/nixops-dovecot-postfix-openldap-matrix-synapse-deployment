@@ -10,19 +10,30 @@ in
     server_names_hash_bucket_size 64;
   '';
 
-  services.nginx.virtualHosts."${fqdn}" = {
-    serverAliases = opt.acme.aliases;
-    enableACME = true;
-  };
+  services.nginx.virtualHosts."${fqdn}".enableACME = true;
+  services.nginx.virtualHosts."${opt.matrix.synapse.fqdn}".useACMEHost = fqdn;
+  services.nginx.virtualHosts."${opt.matrix.element.fqdn}".useACMEHost = fqdn;
 
   security.acme = {
     acceptTerms = true;
     email = "admin@ngse.de";
     preliminarySelfsigned = opt.acme.preliminarySelfsigned;
+    certs."${fqdn}".extraDomainNames = opt.acme.aliases;
     #deprecation detected 2020-12-24 certs."${fqdn}".allowKeysForGroup = true;
   } // lib.optionalAttrs (!opt.acme.production) {
     server = https://acme-staging-v02.api.letsencrypt.org/directory;
   };
 
-  systemd.services."acme-${fqdn}".enable = true; #opt.acme.production;
+  systemd.services."acme-${fqdn}".enable = opt.acme.production;
+  systemd.timers."acme-${fqdn}".enable = opt.acme.production;
+  systemd.targets."acme-finished-${fqdn}" =
+    let
+      deps = [ "acme-selfsigned-${fqdn}.service" ]
+        ++ lib.optionals opt.acme.production [ "acme-${fqdn}.service" ];
+    in
+    lib.mkForce {
+      wantedBy = [ "default.target" ];
+      requires = deps;
+      after = deps;
+    };
 }
