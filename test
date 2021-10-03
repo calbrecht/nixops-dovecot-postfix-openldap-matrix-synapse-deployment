@@ -90,6 +90,30 @@ expect {
   timeout exit
 }
 
+# now with matrix-synapse-rest-password-provider through ma1sd
+set auth_user t1
+
+send "GET /_matrix/client/r0/login HTTP/1.1\r"
+send "Host: $matrix_host\r\r"
+expect {
+  -re ".*$flow.*" {}
+  timeout exit
+}
+send "\r\r"
+
+set content \{"type":"$flow","user":"$auth_user","password":"$auth_pass"\}
+set length [string bytelength $content]
+
+send "POST /_matrix/client/r0/login HTTP/1.1\r"
+send "Host: $matrix_host\r"
+send "Content-Length: $length\r"
+send "Content-Type: application/json\r\r"
+send "$content\r\r"
+expect {
+  -re ".*@$auth_user:$test_host" {}
+  timeout exit
+}
+
 puts "\n\nDone, all good."
 
 close

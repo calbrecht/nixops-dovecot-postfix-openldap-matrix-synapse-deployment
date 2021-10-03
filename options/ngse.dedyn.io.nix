@@ -18,6 +18,7 @@ rec {
       testPass = "test4me";
     };
     element.fqdn = "riot.${fqdn}";
+    dnpass = "hQe93vmosetj5BHEJA3tKET4";
   };
 
   openldap = {
@@ -26,6 +27,7 @@ rec {
         #slappasswd -nh "{SSHA}" | base64
         postfix = "e1NTSEF9VkN2QThlUG9HR0hmWmdLT3dOM1RBZEhDTW5JRGN5b04=";
         dovecot = "e1NTSEF9VkN2QThlUG9HR0hmWmdLT3dOM1RBZEhDTW5JRGN5b04=";
+        matrix = "e1NTSEF9czR0bkM3ZmVJaEFNWHRUeDROd1FvWTM1d0xjTzBkUzA=";
       };
       people = {
         t1 = {
@@ -64,6 +66,12 @@ rec {
       mx.reject = [ ];
     };
     client.reject = [ ];
+  };
+
+  postgres.matrix-synapse = {
+    database = "matrix-synapse";
+    user = "matrix-synapse";
+    password = "ktJwZ2YnEFU7fbMusLb8aUw4";
   };
 
   dovecot.dnpass = "e1NTSEF9LzlZM2pTVkdPelhxSm5Jd3RnM0t0UlZ2RnlWazNZVCs=";

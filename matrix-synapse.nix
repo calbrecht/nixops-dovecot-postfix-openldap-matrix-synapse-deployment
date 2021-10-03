@@ -2,14 +2,34 @@
 let
   opt = import ./options.nix { inherit config; };
   fqdn = opt.fqdn;
+  matrix-synapse-rest-password-provider = with pkgs; python3Packages.buildPythonPackage rec {
+    pname = "matrix-synapse-rest-password-provider";
+    version = "0.1.4";
+
+    src = fetchFromGitHub {
+      owner = "ma1uta";
+      repo = pname;
+      rev = "c782c84aeab1872e73b6c29aadb99d3852e26bbd";
+      sha256 = "sha256-XkLKX2uVqg43MJFXVF2P6lImEcswIqALwD6FZBoAKW0=";
+    };
+
+    patches = [
+      (pkgs.fetchurl {
+        url = "https://patch-diff.githubusercontent.com/raw/ma1uta/matrix-synapse-rest-password-provider/pull/8.patch";
+        sha256 = "sha256-BwVBiikXhH2xsWr3N3HhHFynOJnH+egbz7uk0+2S4aw=";
+      })
+    ];
+  };
+  dc = "DC=" + lib.concatStringsSep ",DC=" (lib.splitString "." fqdn);
 in
 with lib; {
 
   environment.systemPackages = with pkgs; [
     #openldap
+    #matrix-synapse-rest-password-provider
   ];
 
-  nixpkgs.config.packageOverrides = pkgs: with pkgs; rec { };
+  #nixpkgs.config.packageOverrides = pkgs: with pkgs; rec {};
 
   networking.firewall = {
     allowedTCPPorts = [ 3478 3479 5349 5350 ];
@@ -21,12 +41,13 @@ with lib; {
     postgresql = {
       enable = true;
       # ! good to know ! wiped the existing db
-      initialScript = pkgs.writeText "synapse-init.sql" ''
-        CREATE ROLE "matrix-synapse" WITH LOGIN PASSWORD 'synapse';
-        CREATE DATABASE "matrix-synapse" WITH OWNER "matrix-synapse"
-        TEMPLATE template0
+      initialScript = with opt.postgres.matrix-synapse; pkgs.writeText "synapse-init.sql" ''
+        CREATE ROLE "${user}" WITH LOGIN PASSWORD '${password}';
+        CREATE DATABASE "${database}" WITH OWNER "${user}"
+        ENCODING 'UTF8'
         LC_COLLATE = "C"
-        LC_CTYPE = "C";
+        LC_CTYPE = "C"
+        TEMPLATE template0;
       '';
       package = pkgs.postgresql_11;
       settings = {
@@ -54,7 +75,9 @@ with lib; {
           '';
           locations."= /.well-known/matrix/client".extraConfig = ''
             add_header Content-Type application/json;
-            add_header Access-Control-Allow-Origin *;
+            add_header Access-Control-Allow-Origin 'https://${opt.matrix.element.fqdn}';
+            add_header Access-Control-Allow-Method 'GET, OPTIONS';
+            add_header Access-Control-Allow-Headers '*';
             return 200 '${builtins.toJSON {
               "m.homeserver" = {
                 "base_url" = "https://${opt.matrix.synapse.fqdn}";
@@ -70,28 +93,20 @@ with lib; {
           forceSSL = true;
           locations."/".extraConfig = "return 302 https://${opt.matrix.element.fqdn};";
           locations."/_matrix" = {
-            proxyPass = "http://127.0.0.1:8008";
+            proxyPass = "http://127.0.0.1:8008/_matrix";
             extraConfig = ''
-              proxy_set_header Host $host;
-              proxy_set_header X-Forwarded-For $remote_addr;
             '';
             priority = 30;
           };
           locations."/_matrix/identity" = {
-            proxyPass = "http://127.0.0.1:8090";
+            proxyPass = "http://127.0.0.1:8090/_matrix/identity";
             extraConfig = ''
-              #add_header Access-Control-Allow-Origin *;
-              #add_header Access-Control-Allow-Method 'GET, POST, PUT, DELETE, OPTIONS';
-              #proxy_set_header Host $host;
-              #proxy_set_header X-Forwarded-For $remote_addr;
             '';
             priority = 20;
           };
           locations."/_matrix/client/r0/user_directory" = {
-            proxyPass = "http://127.0.0.1:8090";
+            proxyPass = "http://127.0.0.1:8090/_matrix/client/r0/user_directory";
             extraConfig = ''
-              proxy_set_header Host $host;
-              proxy_set_header X-Forwarded-For $remote_addr;
             '';
             priority = 10;
           };
@@ -117,7 +132,7 @@ with lib; {
                 feature_latex_maths = true;
               };
               roomDirectory.servers = [
-                opt.matrix.synapse.fqdn
+                fqdn
                 "matrix.mayflower.de"
                 "matrix.org"
               ];
@@ -128,6 +143,11 @@ with lib; {
             };
           };
           locations."/".index = "index.html";
+          extraConfig = ''
+            add_header Access-Control-Allow-Origin 'https://${opt.matrix.element.fqdn}';
+            add_header Access-Control-Allow-Method '*';
+            add_header Access-Control-Allow-Headers '*';
+          '';
         };
       };
     };
@@ -137,6 +157,9 @@ with lib; {
       enable_registration = false;
       enable_metrics = false;
       database_type = "psycopg2";
+      database_args = with opt.postgres.matrix-synapse; {
+        inherit database user password;
+      };
       listeners = [
         {
           bind_address = "localhost";
@@ -150,6 +173,15 @@ with lib; {
           x_forwarded = true;
         }
       ];
+      plugins = with pkgs; [
+        matrix-synapse-rest-password-provider
+      ];
+      extraConfig = ''
+        password_providers:
+          - module: "rest_auth_provider.RestAuthProvider"
+            config:
+              endpoint: "http://127.0.0.1:8090"
+      '';
       max_upload_size = "10M";
       no_tls = true;
       public_baseurl = "https://${opt.matrix.synapse.fqdn}/";
@@ -178,6 +210,21 @@ with lib; {
         dns.overwrite.homeserver.client = [
           { name = opt.matrix.synapse.fqdn; value = "http://127.0.0.1:8008"; }
         ];
+        ldap = {
+          enabled = true;
+          connection = {
+            host = "127.0.0.1";
+            port = 389;
+            bindDn = "UID=matrix,OU=services,${dc}";
+            bindPassword = opt.matrix.dnpass;
+            baseDNs = [ "OU=people,${dc}" ];
+          };
+          attribute = {
+            uid = { type = "uid"; value = "uid"; };
+            name = "cn";
+            threepid = { email = [ "mail" ]; };
+          };
+        };
         session.policy.validation = {
           enabled = true;
           forLocal = {

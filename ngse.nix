@@ -7,12 +7,11 @@
       ./openldap.nix
       ./postfix.nix
       ./dovecot.nix
-      ./matterbridge.nix
+      #./matterbridge.nix
       ./matrix-synapse.nix
     ];
 
     environment.systemPackages = with pkgs; [
-      kitty
       sqlite
     ];
 
