@@ -17,11 +17,12 @@ in
   security.acme = {
     acceptTerms = true;
     email = "admin@ngse.de";
+    defaults.email = "admin@ngse.de";
     preliminarySelfsigned = opt.acme.preliminarySelfsigned;
     certs."${fqdn}".extraDomainNames = opt.acme.aliases;
     #deprecation detected 2020-12-24 certs."${fqdn}".allowKeysForGroup = true;
   } // lib.optionalAttrs (!opt.acme.production) {
-    server = https://acme-staging-v02.api.letsencrypt.org/directory;
+    defaults.server = https://acme-staging-v02.api.letsencrypt.org/directory;
   };
 
   systemd.services."acme-${fqdn}".enable = opt.acme.production;

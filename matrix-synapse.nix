@@ -32,7 +32,7 @@ with lib; {
   #nixpkgs.config.packageOverrides = pkgs: with pkgs; rec {};
 
   networking.firewall = {
-    allowedTCPPorts = [ 3478 3479 5349 5350 ];
+    allowedTCPPorts = [ 3478 3479 5349 5350 8448 ];
     allowedUDPPorts = [ 3478 3479 5349 5350 ];
     allowedUDPPortRanges = [{ from = 50000; to = 54999; }];
   };
@@ -64,13 +64,24 @@ with lib; {
 
       logError = "stderr debug";
 
+      #upstreams = {
+      #  _matrix = {
+      #    extraConfig = ''
+      #      rewrite ^ $request_uri;
+      #      rewrite ^/_matrix/(.*) $1 break;
+      #      return 400; #if the second rewrite won't match
+      #      proxy_pass http://127.0.0.1:8008/_matrix/$uri;
+      #    '';
+      #  };
+      #};
+
       virtualHosts = {
         "${fqdn}" = {
           addSSL = true;
           locations."= /.well-known/matrix/server".extraConfig = ''
             add_header Content-Type application/json;
             return 200 '${builtins.toJSON {
-              "m.server" = "${opt.matrix.synapse.fqdn}:443";
+              "m.server" = "${opt.matrix.synapse.fqdn}:8448";
             }}';
           '';
           locations."= /.well-known/matrix/client".extraConfig = ''
@@ -91,21 +102,30 @@ with lib; {
         };
         "${opt.matrix.synapse.fqdn}" = {
           forceSSL = true;
-          locations."/".extraConfig = "return 302 https://${opt.matrix.element.fqdn};";
-          locations."/_matrix" = {
-            proxyPass = "http://127.0.0.1:8008/_matrix";
+          listen = [
+            { addr = "0.0.0.0"; port = 8448; ssl = true; }
+            { addr = "[::0]"; port = 8448; ssl = true; }
+            { addr = "0.0.0.0"; port = 443; ssl = true; }
+            { addr = "[::0]"; port = 443; ssl = true; }
+          ];
+          locations."/" = {
+            extraConfig = "return 302 https://${opt.matrix.element.fqdn};";
+            priority = 40;
+          };
+          locations."~ ^/_matrix/(.*)$" = {
+            proxyPass = "http://127.0.0.1:8008";
             extraConfig = ''
             '';
             priority = 30;
           };
-          locations."/_matrix/identity" = {
-            proxyPass = "http://127.0.0.1:8090/_matrix/identity";
+          locations."~ ^/_matrix/identity/(.*)$" = {
+            proxyPass = "http://127.0.0.1:8090";
             extraConfig = ''
             '';
             priority = 20;
           };
-          locations."/_matrix/client/r0/user_directory" = {
-            proxyPass = "http://127.0.0.1:8090/_matrix/client/r0/user_directory";
+          locations."~ ^/_matrix/client/r0/user_directory/(.*)$" = {
+            proxyPass = "http://127.0.0.1:8090";
             extraConfig = ''
             '';
             priority = 10;
@@ -154,50 +174,68 @@ with lib; {
 
     matrix-synapse = {
       enable = true;
-      enable_registration = false;
-      enable_metrics = false;
-      database_type = "psycopg2";
-      database_args = with opt.postgres.matrix-synapse; {
-        inherit database user password;
-      };
-      listeners = [
-        {
-          bind_address = "localhost";
-          port = 8008;
-          resources = [{
-            compress = false;
-            names = [ "client" "federation" ];
-          }];
-          tls = false;
-          type = "http";
-          x_forwarded = true;
-        }
-      ];
       plugins = with pkgs; [
         matrix-synapse-rest-password-provider
       ];
-      extraConfig = ''
-        password_providers:
-          - module: "rest_auth_provider.RestAuthProvider"
-            config:
-              endpoint: "http://127.0.0.1:8090"
-      '';
-      max_upload_size = "10M";
-      no_tls = true;
-      public_baseurl = "https://${opt.matrix.synapse.fqdn}/";
-      registration_shared_secret = opt.matrix.synapse.registrationSharedSecret;
-      server_name = "${fqdn}"; #"${opt.matrix.synapse.fqdn}";
-      tls_certificate_path = "${config.security.acme.certs."${fqdn}".directory}/fullchain.pem";
-      #tls_private_key_path = "${config.security.acme.certs."${fqdn}".directory}/key.pem";
-      turn_uris = [
-        "turn:${fqdn}:3478?transport=udp"
-        "turn:${fqdn}:3478?transport=tcp"
+      settings = {
+        max_upload_size = "10M";
+        database.name = "psycopg2";
+        database.args = with opt.postgres.matrix-synapse; {
+          inherit database user password;
+        };
+        enable_registration = false;
+        enable_metrics = false;
+        server_name = "${fqdn}"; #"${opt.matrix.synapse.fqdn}";
+        public_baseurl = "https://${opt.matrix.synapse.fqdn}/";
+        turn_uris = [
+          "turn:${fqdn}:3478?transport=udp"
+          "turn:${fqdn}:3478?transport=tcp"
+        ];
+        turn_user_lifetime = "86400000";
+        turn_shared_secret = opt.turn.authSecret;
+        tls_certificate_path = "${config.security.acme.certs."${fqdn}".directory}/fullchain.pem";
+        tls_private_key_path = "${config.security.acme.certs."${fqdn}".directory}/key.pem";
+        listeners = [
+          #{
+          #  bind_addresses = [ "::" "0.0.0.0" ];
+          #  port = 8448;
+          #  resources = [
+          #    { names = [ "federation" ]; compress = false; }
+          #  ];
+          #  tls = true;
+          #  type = "http";
+          #  x_forwarded = false;
+          #}
+          {
+            bind_addresses = [ "localhost" ];
+            port = 8008;
+            resources = [
+              #{ names = [ "client" ]; compress = false; }
+              { names = [ "client" "federation" ]; compress = false; }
+            ];
+            tls = false;
+            type = "http";
+            x_forwarded = true;
+          }
+        ];
+      };
+      extraConfigFiles = [
+        (pkgs.writeTextFile {
+          name = "matrix-synapse-extra-config.yml";
+          text = ''
+            registration_shared_secret: ${opt.matrix.synapse.registrationSharedSecret}
+            password_providers:
+              - module: "rest_auth_provider.RestAuthProvider"
+                config:
+                  endpoint: "http://127.0.0.1:8090"
+          '';
+        })
       ];
-      turn_shared_secret = opt.turn.authSecret;
-      turn_user_lifetime = "86400000";
+      #deprecation detected 2022-04-28 no_tls = true;
+      #deprecation detected registration_shared_secret = opt.matrix.synapse.registrationSharedSecret;
       #deprecation detected 2020-12-24 web_client = true;
       #deprecated 2019-10-14 trusted_third_party_id_servers = [ fqdn ];
-      verbose = "0";
+      #deprecation detected verbose = "0";
     };
 
     mxisd = {
